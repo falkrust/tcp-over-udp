@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=-Wall -g
+CFLAGS=-Wall -std=c++11 -g -DTOU_DEBUG
 all: main toulib.o server.o client.o
 main: main.cpp toulib.o server.o client.o
 	$(CC) $(CFLAGS) -o main main.cpp toulib.o server.o client.o
@@ -10,4 +10,4 @@ server.o: TOUServer.cpp TOUServer.h
 client.o: TOUClient.cpp TOUClient.h
 	$(CC) $(CFLAGS) -o client.o -c TOUClient.cpp 
 clean:
-	rm -f *.o
+	rm -f *.o main
