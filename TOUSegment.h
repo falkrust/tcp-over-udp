@@ -4,10 +4,11 @@
 class TOUSegment {
 private:
 	unsigned int sequenceNum, ACKNum;
-	bool fin, ACK;
+	unsigned short rcvWindow;
+	bool is_fin, is_ack;
 	char * data;
 	static unsigned int readInt(char * str);
-	static bool bigEndian;
+	static unsigned short readShort(char * str);
 public:
 	TOUSegment();
 	static TOUSegment parseSegment(char *data, int len);
@@ -17,7 +18,8 @@ public:
 	bool isFin();
 	char * getData();
 	static void putInt(char * array, unsigned int num);
-	static bool findEndiannes();
+	static void putShort(char * array, unsigned short num);
+	bool putHeader(char * array);
 };
 
 #endif

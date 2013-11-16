@@ -9,7 +9,12 @@
 using namespace std;
 
 #define HEADER_SIZE 12
+#define ACK_OFFSET 4
+#define RCV_WINDOW_OFFSET 10
 #define BYTE_MASK 0xFFlu
+#define ACK_MASK 0b10000000
+#define FIN_MASK 0b01000000
+
 
 class IllegalData: public exception {
 	virtual const char* what() const throw() {
@@ -18,23 +23,18 @@ class IllegalData: public exception {
 } illegalData;
 
 TOUSegment::TOUSegment() {
-
+	this->data = NULL;
 }
 
 TOUSegment TOUSegment::parseSegment(char *data, int len) {
-	try {
-		throw illegalData;
-	} catch (exception& e){
-		printf("Illegal exception caught\n");
-	}
-	if (len < HEADER_SIZE || data == NULL) {
+	if (len < HEADER_SIZE) {
 		throw illegalData;
 	}
-
 	TOUSegment newSegment;
-	newSegment.data = data;
-	char * current = data;
-	newSegment.sequenceNum = readInt(current);
+	newSegment.data = &data[HEADER_SIZE];
+	newSegment.sequenceNum = readInt(data);
+	newSegment.ACKNum = readInt(&data[ACK_OFFSET]);
+	newSegment.rcvWindow = readShort(&data[RCV_WINDOW_OFFSET]);
 	printf("Sequence num is %d\n", newSegment.sequenceNum);
 
 	printf("Got data %s\n", data);
@@ -43,19 +43,19 @@ TOUSegment TOUSegment::parseSegment(char *data, int len) {
 }
 
 unsigned int TOUSegment::getSequenceNum() {
-	return 0;	
+	return sequenceNum;	
 }
 
 unsigned int TOUSegment::getACKNum() {
-	return 0;
+	return ACKNum;
 }
 
 bool TOUSegment::isACK() {
-	return false;
+	return is_ack;
 }
 
 bool TOUSegment::isFin() {
-	return false;
+	return is_fin;
 }
 
 char * TOUSegment::getData() {
@@ -71,7 +71,9 @@ unsigned int TOUSegment::readInt(char * str) {
 	unsigned int result;
 	char * charPtr = (char*) &result;
 
-
+	// read everything in char array
+	// according to endianness
+	// the code relies on __BYTE_ORDER__ macro
 	#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 		printf("Inside BIG endian\n");
 		charPtr[0] = str[0];
@@ -97,6 +99,8 @@ void TOUSegment::putInt(char * array, unsigned int num) {
 		perror("putInt(): NULL argument");
 		return;
 	}
+	// write everything in char array
+	// according to endianness
 	char * charPtr = (char*) &num;
 	#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 		printf("Inside LITTLE endian\n");
@@ -116,10 +120,45 @@ void TOUSegment::putInt(char * array, unsigned int num) {
 	#endif
 }
 
-bool TOUSegment::bigEndian = true;
 
-bool TOUSegment::findEndiannes() {
-    bigEndian = (htonl(47) == 47); 
-    return bigEndian;
 
+
+unsigned short TOUSegment::readShort(char * str) {
+	if (str == NULL) {
+		perror("readLong(): NULL argument\n");
+		return 0;
+	}
+	unsigned short result;
+	char * charPtr = (char*) &result;
+
+
+	#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+		charPtr[0] = str[0];
+		charPtr[1] = str[1];
+	#elif __BYTE_ORDER == __ORDER_LITTLE_ENDIAN__
+		charPtr[1] = str[0];
+		charPtr[0] = str[1];
+	#else
+		perror("readInt(): Could not determine endiannes of the system");
+		result = 0;
+	#endif
+	return result;
+}
+
+void TOUSegment::putShort(char * array, unsigned short num) {
+	if (array == NULL) {
+		perror("putInt(): NULL argument");
+		return;
+	}
+	char * charPtr = (char*) &num;
+	#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+		array[1] = charPtr[0];
+		array[0] = charPtr[1];
+	#elif __BYTE_ORDER == __ORDER_BIG_ENDIAN__
+		array[0] = charPtr[0];
+		array[1] = charPtr[1];
+	#else
+		perror("putInt(): Could not determine endiannes of the system");
+		return;
+	#endif
 }
