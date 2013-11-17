@@ -15,8 +15,9 @@ private:
 	int sockfd;
 	int ssthresh, cwnd, dupACKcount;
 	int currentTimeout;	// in seconds
+	int seqoffset;
 	CLIENT_STATE currentState;
-	CLIENT_CNGSTNCTRL congState;
+	CLIENT_CNGSTNCTRL congControlState;
 	char * domainName;
 	char * data;
 	sockaddr_storage dest;
@@ -29,7 +30,7 @@ private:
 	pthread_mutex_t s_mutex, v_mutex, q_mutex;
 	static void * clientTimeoutWorker(void * clientPtr);
 	static void * clientSendWorker(void * clientPtr);
-	int sendSegment(int startIndex, int offset, int numbytestosend);
+	int sendSegment(int startIndex, int numbytestosend);
 
 public:
 	/**

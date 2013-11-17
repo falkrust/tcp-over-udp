@@ -38,9 +38,10 @@ TOUClient::TOUClient(char *domainName, int port) {
 	pthread_mutex_init(&s_mutex, NULL);
 	pthread_mutex_init(&v_mutex, NULL);
 	pthread_mutex_init(&q_mutex, NULL);
-	this->congState = SLOW_START;
+	this->congControlState = SLOW_START;
 	this->lastSeqReceived = 0;
 	this->currentTimeout = DEFAULT_CLIENT_TIMEOUT;
+	this->seqoffset = 2;
 }
 
 TOUClient::~TOUClient() {
@@ -219,9 +220,7 @@ bool TOUClient::send(char * data, int len) {
 
 	pthread_join(wid, NULL);
 	return false;
-
 }
-
 
 void * TOUClient::clientTimeoutWorker(void * clientPtr) {
 	TOUClient * cptr = (TOUClient*) clientPtr;
@@ -238,9 +237,25 @@ void * TOUClient::clientTimeoutWorker(void * clientPtr) {
 				sleep(DEFAULT_WORKER_SLEEP_PERIOD);
 			}
 		} else {
+			// if this executes, then timeout happened
 			for(list<QueueEntry>::iterator it=expired.begin(); it != expired.end(); ++it) {
+				cptr->dupACKcount = 0;
+				cptr->ssthresh = cptr->cwnd/2;
+				switch (cptr->congControlState) {
+					case SLOW_START:
+								cptr->cwnd = cptr->ssthresh+3*MSS;
+								break;
+					case CONG_AVOIDANCE:
+								cptr->cwnd = MSS;
+								cptr->congControlState = SLOW_START;
+								break;
+					case FAST_RECOVERY:
+								cptr->cwnd = 1;
+								break;
+				}
+
 				QueueEntry cur = *it;
-				printf("%u", cur.len);
+				cptr->sendSegment(cur.byteStart, cur.len);
 
 			}
 		}
@@ -251,7 +266,6 @@ void * TOUClient::clientTimeoutWorker(void * clientPtr) {
 void * TOUClient::clientSendWorker(void * clientPtr) {
 	TOUClient * cptr = (TOUClient*) clientPtr;
 	TOUQueue q = cptr->queue;
-	int seqoffset = 2;	// TODO: start number should be chosen on random
 	int currentIndex = 0, toSend = cptr->toSend;
 	while(true) {
 		int unACKd = q.getLen();
@@ -264,14 +278,14 @@ void * TOUClient::clientSendWorker(void * clientPtr) {
 				return NULL;
 			}
 
-			int sentBytes = cptr->sendSegment(currentIndex, seqoffset, bufsize);
+			int sentBytes = cptr->sendSegment(currentIndex, bufsize);
 			printf("Client has sent %d bytes\n", sentBytes);
 		}
 	}
 	return NULL;
 }
 
-int TOUClient::sendSegment(int currentIndex, int seqoffset, int numbytestosend) {
+int TOUClient::sendSegment(int currentIndex, int numbytestosend) {
 	TOUSegment segment(seqoffset+currentIndex, lastSeqReceived + 1,
 			RECEIVER_BUFFER_SIZE, false, false, false);
 	char buffer[SEGMENT_SIZE+TOU_HEADER_SIZE+1];
@@ -279,11 +293,13 @@ int TOUClient::sendSegment(int currentIndex, int seqoffset, int numbytestosend) 
 	strncpy(&buffer[TOU_HEADER_SIZE], &(data[currentIndex]), numbytestosend);
 	unsigned int addr_len = sizeof dest;
 	int sentThisTime;
-	pthread_mutex_lock(&s_mutex);
 
+	// socket access in critical region
+	pthread_mutex_lock(&s_mutex);
 	sentThisTime = sendto(sockfd, buffer, numbytestosend + TOU_HEADER_SIZE, 0,
 		(struct sockaddr*)&dest, addr_len);
 	pthread_mutex_unlock(&s_mutex);
+
 	if (sentThisTime == -1) {
 		perror("Failed to send data");
 		return 0;
