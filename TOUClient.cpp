@@ -18,10 +18,12 @@
 #include <signal.h>
 #include <sys/time.h>
 
-#define RECV_TIMEOUT 4
+#define RECV_CONNECTING_TIMEOUT 4
 #define MSS 100
 #define DEFAULT_SSTHRESH 1000
 #define DEFAULT_WORKER_SLEEP_PERIOD 5
+#define RECEIVER_BUFFER_SIZE 2500
+#define DEFAULT_CLIENT_TIMEOUT 5
 
 using namespace std;
 
@@ -32,6 +34,7 @@ TOUClient::TOUClient(char *domainName, int port) {
 	this->sockfd = -1;
 	this->ssthresh = 1000;
 	pthread_mutex_init(&s_mutex, NULL);
+	pthread_mutex_init(&v_mutex, NULL);
 	this->congState = SLOW_START;
 }
 
@@ -43,11 +46,11 @@ TOUClient::~TOUClient() {
 
 void *get_in_addr_1(struct sockaddr *sa)
 {
-    if (sa->sa_family == AF_INET) {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
-    }
+	if (sa->sa_family == AF_INET) {
+		return &(((struct sockaddr_in*)sa)->sin_addr);
+	}
 
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
 /**
@@ -77,7 +80,7 @@ bool TOUClient::init() {
 
 		// enable timeout on socket when waiting for data
 		struct timeval tv;
-		tv.tv_sec = RECV_TIMEOUT;
+		tv.tv_sec = RECV_CONNECTING_TIMEOUT;
 		tv.tv_usec = 0;
 
 		if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
@@ -135,7 +138,7 @@ bool TOUClient::connect() {
 		}
 
 		printf("The data was sent\n");
-
+		sockaddr_storage dest;
 		unsigned int addr_len = sizeof dest;
 		int numbytes;
 		if ((numbytes = recvfrom(sockfd, buffer, TOU_HEADER_SIZE , 0,
@@ -147,9 +150,9 @@ bool TOUClient::connect() {
 		printf("Client received %d bytes\n", numbytes);
 		char s[INET6_ADDRSTRLEN];
 		printf("listener: got packet from %s\n",
-		        inet_ntop(dest.ss_family,
-		            get_in_addr_1((struct sockaddr *)&dest),
-		            s, sizeof s));
+				inet_ntop(dest.ss_family,
+					get_in_addr_1((struct sockaddr *)&dest),
+					s, sizeof s));
 
 		TOUSegment synack = TOUSegment::parseSegment(buffer, numbytes);
 		if (!synack.isSyn() || !synack.isAck() || synack.isFin()) {
@@ -166,7 +169,7 @@ bool TOUClient::connect() {
 
 
 		// set the timer parameters and launch a thread
-		pthread_create(&tid, NULL, clientHandler, this);
+		pthread_create(&tid, NULL, clientTimeoutWorker, this);
 		printf("Created thread\n");
 
 		currentState = CL_ESTABLISHED;
@@ -190,27 +193,40 @@ bool TOUClient::send(char * data, int len) {
 		return false;
 	}
 
+	lowestSent = 0;
+	highestSent = 0;
+	highestACKd = 0;
 	return false;
 }
 
 
-void * TOUClient::clientHandler(void * clientPtr) {
+void * TOUClient::clientTimeoutWorker(void * clientPtr) {
 	TOUClient * cptr = (TOUClient*) clientPtr;
 	TOUTimer timer = cptr->timer;	
 
 	while(true) {
-		timeval now;
-		if(gettimeofday(&now, NULL) == -1) {
-			perror("clientHandler(): gettimeofday error");
-			return NULL;
-		} else {
-			list<QueueEntry> expired = timer.getExpired(now.tv_sec);	
-			if(expired.empty()) {
-				sleep(DEFAULT_WORKER_SLEEP_PERIOD);
+		long now = TOUTimer::getCurrentSeconds();
+		list<QueueEntry> expired = timer.getExpired(now);
+		if(expired.empty()) {
+			QueueEntry front;
+			if (timer.getFront(&front)) {
+				sleep(front.dueTime - now);
 			} else {
-				//TODO: retransmit all expired packets
+				sleep(DEFAULT_WORKER_SLEEP_PERIOD);
+			}
+		} else {
+			for(list<QueueEntry>::iterator it=expired.begin(); it != expired.end(); ++it) {
+				QueueEntry cur = *it;
+				printf("%u", cur.len);
+
 			}
 		}
 	}
+	return NULL;
+}
+
+void * TOUClient::clientSendWorker(void * clientPtr) {
+	TOUClient * cptr = (TOUClient*) clientPtr;
+	TOUTimer timer = cptr->timer;	
 	return NULL;
 }

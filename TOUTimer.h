@@ -7,9 +7,14 @@
 using namespace std;
 
 struct QueueEntry {
-	unsigned byteNum;
+	unsigned byteStart, len;
 	long dueTime;
-
+	QueueEntry(unsigned bs, unsigned ln, long dt) {
+		byteStart = bs;
+		len = ln;
+		dueTime = dt;
+	};
+	QueueEntry(){};
 };
 
 

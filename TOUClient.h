@@ -16,14 +16,15 @@ private:
 	unsigned ssthresh, cwnd, dupACKcount;
 	CLIENT_STATE currentState;
 	CLIENT_CNGSTNCTRL congState;
-	addrinfo ainfo;
 	char *domainName;
-	sockaddr_storage dest;	
-	unsigned int nextSeqNum, lastACK;
+
+	unsigned int lowestSent, highestSent, highestACKd;
 	TOUTimer timer;
-	pthread_t tid;
-	pthread_mutex_t s_mutex;
-	static void * clientHandler(void * clientPtr);
+	pthread_t tid, sid;
+	/* s_mutex - on socket, v_mutex - on different parameters */
+	pthread_mutex_t s_mutex, v_mutex;
+	static void * clientTimeoutWorker(void * clientPtr);
+	static void * clientSendWorker(void * clientPtr);
 
 public:
 	/**

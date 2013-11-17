@@ -12,26 +12,22 @@ TOUTimer::TOUTimer() {
 	q_mutex = PTHREAD_MUTEX_INITIALIZER;
 }
 
-bool TOUTimer::add(int byteNum, long delta) {
-	timeval now;
-	if(gettimeofday(&now, NULL) == -1) {
-		return false;
-	} else {
-		QueueEntry newEntry;
-		newEntry.byteNum = byteNum;
-		newEntry.dueTime = delta + (long)now.tv_sec;
-		pthread_mutex_lock(&q_mutex);
-		q.push_back(newEntry);
-		pthread_mutex_unlock(&q_mutex);
-		return true;
-	}
+bool TOUTimer::add(int byteStart, long delta) {
+	long now = getCurrentSeconds();
+	QueueEntry newEntry;
+	newEntry.byteStart = byteStart;
+	newEntry.dueTime = delta + now;
+	pthread_mutex_lock(&q_mutex);
+	q.push_back(newEntry);
+	pthread_mutex_unlock(&q_mutex);
+	return true;
 }
 
-bool TOUTimer::removeBeforeByte(unsigned byteNum) {
+bool TOUTimer::removeBeforeByte(unsigned byteStart) {
 	pthread_mutex_lock(&q_mutex);
 	for(deque<QueueEntry>::iterator it = q.begin(); it != q.end();) {
 		QueueEntry cur = *it;
-		if (cur.byteNum <= byteNum) {
+		if (cur.byteStart <= byteStart) {
 			it = q.erase(it);
 		} else {
 			++it;
@@ -47,6 +43,11 @@ void TOUTimer::removeFront() {
 	pthread_mutex_unlock(&q_mutex);
 }
 
+/**
+ * if the queue is not empty
+ * front of the queue is written into the space pointer by *entry
+ * and true is returned, otherwise false is returned
+ */
 bool TOUTimer::getFront(QueueEntry * entry) {
 	bool result = false;
 	pthread_mutex_lock(&q_mutex);
@@ -72,6 +73,7 @@ long TOUTimer::getCurrentSeconds() {
 	if (gettimeofday(&now, NULL) == -1) {
 		return -1;
 	} else {
+		perror("warning: gettimeofday() failed");
 		return (long) now.tv_sec;
 	}
 }

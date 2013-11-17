@@ -9,7 +9,7 @@ private:
 
 public:
 	static TOUClient getClient(char *domainName, int port);
-    static TOUServer getServer(int port);
+	static TOUServer getServer(int port);
 };
 
 #endif  // TCPOVERUDP_H
