@@ -21,6 +21,7 @@ private:
 	char * domainName;
 	char * data;
 	sockaddr_storage dest;
+	unsigned int addr_len;
 	unsigned int lowestSent, highestSent, highestACKd;
 	unsigned lastSeqReceived;
 	int toSend, hasSent;
@@ -31,6 +32,9 @@ private:
 	static void * clientTimeoutWorker(void * clientPtr);
 	static void * clientSendWorker(void * clientPtr);
 	int sendSegment(int startIndex, int numbytestosend);
+	void slowStartHandler(bool);
+	void congAvoidanceHandler(bool);
+	void fastRecoveryHandler(bool);
 
 public:
 	/**

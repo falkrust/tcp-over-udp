@@ -147,7 +147,7 @@ bool TOUClient::connect() {
 		}
 
 		printf("The data was sent\n");
-		unsigned int addr_len = sizeof dest;
+		addr_len = sizeof dest;
 		int numbytes;
 		if ((numbytes = recvfrom(sockfd, buffer, TOU_HEADER_SIZE , 0,
 			(struct sockaddr *)&dest, &addr_len)) == -1) {
@@ -213,15 +213,77 @@ bool TOUClient::send(char * data, int len) {
 	pthread_t wid;
 	pthread_create(&wid, NULL, clientSendWorker, this);
 
+	char buffer[TOU_HEADER_SIZE + 11];
 	// keep waiting for acks
+	int numbytes;
 	while(true) {
+		if ((numbytes = recvfrom(sockfd, buffer, TOU_HEADER_SIZE , 0,
+			(struct sockaddr *)&dest, &addr_len)) == -1) {
+			perror("connect(): failed to receive data");
+		} else {
+			TOUSegment seg = TOUSegment::parseSegment(buffer, numbytes);
+			if(!seg.isAck()) {
+				unsigned ackNum = seg.getACKNum();
+				bool isDuplicateACK = highestACKd >= ackNum;
+				if (!isDuplicateACK)
+					highestACKd = ackNum;
 
+				switch(congControlState) {
+					case SLOW_START:	
+							slowStartHandler(isDuplicateACK);
+							break;
+					case CONG_AVOIDANCE:
+							congAvoidanceHandler(isDuplicateACK);
+							break;
+					case FAST_RECOVERY:
+							fastRecoveryHandler(isDuplicateACK);
+							break;
+				}	
+			}
+		}
 	}
 
 	pthread_join(wid, NULL);
 	return false;
 }
 
+void TOUClient::slowStartHandler(bool isDuplicateACK) {
+	if(isDuplicateACK) {
+		dupACKcount++;	
+		if (dupACKcount == 3) {
+			ssthresh = cwnd/2;
+			cwnd = ssthresh + 3*MSS;
+			// todo retransmit missing
+		}
+	} else {
+		cwnd = cwnd+MSS;
+		dupACKcount = 0;
+		// todo retransmit new segment
+	}
+}
+
+void TOUClient::congAvoidanceHandler(bool isDuplicateACK) {
+	if(isDuplicateACK) {
+		dupACKcount++;
+		if (dupACKcount == 3) {
+			ssthresh = cwnd/2;
+			cwnd = ssthresh+3*MSS;
+			// todo retransmit missing segment
+		}
+	} else {
+		// new ACK
+		cwnd = cwnd + MSS*MSS/cwnd;
+		dupACKcount = 0;
+		// todo transmit new segment
+	};
+}
+
+void TOUClient::fastRecoveryHandler(bool isDuplicateACK) {
+	if(isDuplicateACK) {
+		cwnd = cwnd + MSS;
+		// transmit new segment if allowed
+	}
+}
 void * TOUClient::clientTimeoutWorker(void * clientPtr) {
 	TOUClient * cptr = (TOUClient*) clientPtr;
 	TOUQueue queue = cptr->queue;	
@@ -291,10 +353,10 @@ int TOUClient::sendSegment(int currentIndex, int numbytestosend) {
 	char buffer[SEGMENT_SIZE+TOU_HEADER_SIZE+1];
 	segment.putHeader(buffer);
 	strncpy(&buffer[TOU_HEADER_SIZE], &(data[currentIndex]), numbytestosend);
-	unsigned int addr_len = sizeof dest;
 	int sentThisTime;
 
 	// socket access in critical region
+	// b/c i have two thread writing two the same socket at the same time
 	pthread_mutex_lock(&s_mutex);
 	sentThisTime = sendto(sockfd, buffer, numbytestosend + TOU_HEADER_SIZE, 0,
 		(struct sockaddr*)&dest, addr_len);
