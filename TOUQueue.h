@@ -18,15 +18,16 @@ struct QueueEntry {
 };
 
 
-class TOUTimer {
+class TOUQueue {
 private:
 	pthread_mutex_t q_mutex;
 	deque<QueueEntry> q;
 	unsigned largest;
 	unsigned smallest;
+	int len;
 
 public:
-	TOUTimer();
+	TOUQueue();
 	bool add(int byteNum, long delta);
 	bool removeBeforeByte(unsigned byteNum);
 	void removeFront();

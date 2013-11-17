@@ -14,7 +14,7 @@
 
 #include "TOUClient.h"
 #include "TOUSegment.h"
-#include "TOUTimer.h"
+#include "TOUQueue.h"
 #include <signal.h>
 #include <sys/time.h>
 
@@ -202,10 +202,10 @@ bool TOUClient::send(char * data, int len) {
 
 void * TOUClient::clientTimeoutWorker(void * clientPtr) {
 	TOUClient * cptr = (TOUClient*) clientPtr;
-	TOUTimer timer = cptr->timer;	
+	TOUQueue timer = cptr->timer;	
 
 	while(true) {
-		long now = TOUTimer::getCurrentSeconds();
+		long now = TOUQueue::getCurrentSeconds();
 		list<QueueEntry> expired = timer.getExpired(now);
 		if(expired.empty()) {
 			QueueEntry front;
@@ -227,6 +227,6 @@ void * TOUClient::clientTimeoutWorker(void * clientPtr) {
 
 void * TOUClient::clientSendWorker(void * clientPtr) {
 	TOUClient * cptr = (TOUClient*) clientPtr;
-	TOUTimer timer = cptr->timer;	
+	TOUQueue timer = cptr->timer;	
 	return NULL;
 }

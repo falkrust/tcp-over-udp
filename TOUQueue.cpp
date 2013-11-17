@@ -1,5 +1,5 @@
 
-#include "TOUTimer.h"
+#include "TOUQueue.h"
 #include <sys/time.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -7,12 +7,12 @@
 
 
 #define DEFAULT_SLEEP_PERIOD 5
-TOUTimer::TOUTimer() {
+TOUQueue::TOUQueue() {
 	largest = -1;
 	q_mutex = PTHREAD_MUTEX_INITIALIZER;
 }
 
-bool TOUTimer::add(int byteStart, long delta) {
+bool TOUQueue::add(int byteStart, long delta) {
 	long now = getCurrentSeconds();
 	QueueEntry newEntry;
 	newEntry.byteStart = byteStart;
@@ -23,7 +23,7 @@ bool TOUTimer::add(int byteStart, long delta) {
 	return true;
 }
 
-bool TOUTimer::removeBeforeByte(unsigned byteStart) {
+bool TOUQueue::removeBeforeByte(unsigned byteStart) {
 	pthread_mutex_lock(&q_mutex);
 	for(deque<QueueEntry>::iterator it = q.begin(); it != q.end();) {
 		QueueEntry cur = *it;
@@ -37,7 +37,7 @@ bool TOUTimer::removeBeforeByte(unsigned byteStart) {
 	return true;
 }
 
-void TOUTimer::removeFront() {
+void TOUQueue::removeFront() {
 	pthread_mutex_lock(&q_mutex);
 	q.pop_front();
 	pthread_mutex_unlock(&q_mutex);
@@ -48,7 +48,7 @@ void TOUTimer::removeFront() {
  * front of the queue is written into the space pointer by *entry
  * and true is returned, otherwise false is returned
  */
-bool TOUTimer::getFront(QueueEntry * entry) {
+bool TOUQueue::getFront(QueueEntry * entry) {
 	bool result = false;
 	pthread_mutex_lock(&q_mutex);
 	if(!q.empty()) {
@@ -60,7 +60,7 @@ bool TOUTimer::getFront(QueueEntry * entry) {
 }
 
 
-bool TOUTimer::isEmpty() {
+bool TOUQueue::isEmpty() {
 	bool result;
 	pthread_mutex_lock(&q_mutex);
 	result = q.empty();
@@ -68,7 +68,7 @@ bool TOUTimer::isEmpty() {
 	return result;
 }
 
-long TOUTimer::getCurrentSeconds() {
+long TOUQueue::getCurrentSeconds() {
 	timeval now;
 	if (gettimeofday(&now, NULL) == -1) {
 		return -1;
@@ -80,7 +80,7 @@ long TOUTimer::getCurrentSeconds() {
 
 
 
-list<QueueEntry> TOUTimer::getExpired(long dueTime) {
+list<QueueEntry> TOUQueue::getExpired(long dueTime) {
 	list<QueueEntry> result;
 	pthread_mutex_lock(&q_mutex);
 	while(!q.empty()) {
