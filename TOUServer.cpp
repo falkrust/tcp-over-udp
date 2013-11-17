@@ -112,7 +112,7 @@ bool TOUServer::listen() {
 		return false;
 	}
 	// respond with synack packet
-	TOUSegment synack(0, 0, 2500, false, true, true);
+	TOUSegment synack(0, syn.getSequenceNum()+1, 2500, false, true, true);
 	synack.putHeader(buf);
 	if(sendto(sockfd, buf, TOU_HEADER_SIZE, 0, (struct sockaddr *)&dest, addr_len) == -1) {
 		perror("listen(): failed to send synack segment");
@@ -133,6 +133,7 @@ bool TOUServer::listen() {
 
 	// connection established
 	printf("listen(): connection established\n");
+	currentState = SV_ESTABLISHED;
 	accept();
 
 	close(sockfd);

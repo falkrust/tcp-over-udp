@@ -10,11 +10,15 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <pthread.h>
 
 #include "TOUClient.h"
 #include "TOUSegment.h"
+#include "TOUTimer.h"
+#include <signal.h>
 
 #define RECV_TIMEOUT 4
+#define MSS 100
 
 using namespace std;
 
@@ -23,13 +27,17 @@ TOUClient::TOUClient(char *domainName, int port) {
 	this->port = port;
 	this->currentState = CL_NOINIT;
 	this->sockfd = -1;
+	this->ssthresh = 1000;
+	pthread_mutex_init(&s_mutex, NULL);
+
+
 }
 
 TOUClient::~TOUClient() {
 	// TODO
-	printf("Inside destructor\n");
+	pthread_kill(tid, SIGINT);
+	printf("Inside TOUClient destructor\n");
 }
-
 
 void *get_in_addr_1(struct sockaddr *sa)
 {
@@ -126,11 +134,10 @@ bool TOUClient::connect() {
 
 		printf("The data was sent\n");
 
-		struct sockaddr_storage their_addr;
-		unsigned int addr_len = sizeof their_addr;
+		unsigned int addr_len = sizeof dest;
 		int numbytes;
 		if ((numbytes = recvfrom(sockfd, buffer, TOU_HEADER_SIZE , 0,
-			(struct sockaddr *)&their_addr, &addr_len)) == -1) {
+			(struct sockaddr *)&dest, &addr_len)) == -1) {
 			perror("connect(): failed to receive SYN_ACK");
 			return false;
 		}
@@ -138,8 +145,8 @@ bool TOUClient::connect() {
 		printf("Client received %d bytes\n", numbytes);
 		char s[INET6_ADDRSTRLEN];
 		printf("listener: got packet from %s\n",
-		        inet_ntop(their_addr.ss_family,
-		            get_in_addr_1((struct sockaddr *)&their_addr),
+		        inet_ntop(dest.ss_family,
+		            get_in_addr_1((struct sockaddr *)&dest),
 		            s, sizeof s));
 
 		TOUSegment synack = TOUSegment::parseSegment(buffer, numbytes);
@@ -147,13 +154,24 @@ bool TOUClient::connect() {
 			perror("connect(): failed to receive synack");
 			return false;
 		}
-		TOUSegment ack(0, 0, 2500, false, true, false);
+		TOUSegment ack(1, synack.getSequenceNum()+1, 2500, false, true, false);
 		ack.putHeader(buffer);
-		if (sendto(sockfd, buffer, TOU_HEADER_SIZE, 0, (struct sockaddr*)&their_addr, addr_len) == -1) {
+		if (sendto(sockfd, buffer, TOU_HEADER_SIZE, 0, (struct sockaddr*)&dest, addr_len) == -1) {
 			perror("Failed to send ack");
 			return false;
 		}
 		printf("Connection established\n");
+
+
+		// set the timer parameters and launch a thread
+		timer.setSocketMutex(&s_mutex);
+		timer.setSocket(sockfd);
+		pthread_create(&tid, NULL, TOUTimer::clientHandler, NULL);
+		printf("Created thread\n");
+
+		currentState = CL_ESTABLISHED;
+
+
 		return true;
 	} else {
 		perror("Failed to set header info");
@@ -163,5 +181,12 @@ bool TOUClient::connect() {
 
 
 bool TOUClient::send(char * data, int len) {
+	if (data == NULL or len < 1) {
+		perror("TOUClient::send(): invalid args");
+		return false;
+	}
+	timer.setData(data);
+
+	while(true)
 	return false;
 }
