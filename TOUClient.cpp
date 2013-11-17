@@ -16,9 +16,12 @@
 #include "TOUSegment.h"
 #include "TOUTimer.h"
 #include <signal.h>
+#include <sys/time.h>
 
 #define RECV_TIMEOUT 4
 #define MSS 100
+#define DEFAULT_SSTHRESH 1000
+#define DEFAULT_WORKER_SLEEP_PERIOD 5
 
 using namespace std;
 
@@ -29,8 +32,7 @@ TOUClient::TOUClient(char *domainName, int port) {
 	this->sockfd = -1;
 	this->ssthresh = 1000;
 	pthread_mutex_init(&s_mutex, NULL);
-
-
+	this->congState = SLOW_START;
 }
 
 TOUClient::~TOUClient() {
@@ -164,9 +166,7 @@ bool TOUClient::connect() {
 
 
 		// set the timer parameters and launch a thread
-		timer.setSocketMutex(&s_mutex);
-		timer.setSocket(sockfd);
-		pthread_create(&tid, NULL, TOUTimer::clientHandler, NULL);
+		pthread_create(&tid, NULL, clientHandler, this);
 		printf("Created thread\n");
 
 		currentState = CL_ESTABLISHED;
@@ -185,8 +185,32 @@ bool TOUClient::send(char * data, int len) {
 		perror("TOUClient::send(): invalid args");
 		return false;
 	}
-	timer.setData(data);
+	if (currentState != CL_ESTABLISHED) {
+		perror("TOUClient::send(): socket is not connected");
+		return false;
+	}
 
-	while(true)
 	return false;
+}
+
+
+void * TOUClient::clientHandler(void * clientPtr) {
+	TOUClient * cptr = (TOUClient*) clientPtr;
+	TOUTimer timer = cptr->timer;	
+
+	while(true) {
+		timeval now;
+		if(gettimeofday(&now, NULL) == -1) {
+			perror("clientHandler(): gettimeofday error");
+			return NULL;
+		} else {
+			list<QueueEntry> expired = timer.getExpired(now.tv_sec);	
+			if(expired.empty()) {
+				sleep(DEFAULT_WORKER_SLEEP_PERIOD);
+			} else {
+				//TODO: retransmit all expired packets
+			}
+		}
+	}
+	return NULL;
 }

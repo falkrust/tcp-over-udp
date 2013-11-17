@@ -10,7 +10,6 @@
 TOUTimer::TOUTimer() {
 	largest = -1;
 	q_mutex = PTHREAD_MUTEX_INITIALIZER;
-	this->data = data;
 }
 
 bool TOUTimer::add(int byteNum, long delta) {
@@ -59,17 +58,6 @@ bool TOUTimer::getFront(QueueEntry * entry) {
 	return result;
 }
 
-void TOUTimer::setData(char * data) {
-	this->data = data;
-}
-
-void TOUTimer::setSocketMutex(pthread_mutex_t * s_mutex) {
-	this->s_mutex = s_mutex;
-}
-
-void TOUTimer::setSocket(int sockfd) {
-	this->sockfd = sockfd;
-}
 
 bool TOUTimer::isEmpty() {
 	bool result;
@@ -88,24 +76,24 @@ long TOUTimer::getCurrentSeconds() {
 	}
 }
 
-void * TOUTimer::clientHandler(void * timerObj) {
-	TOUTimer * tobj = (TOUTimer *) timerObj;
 
-	while(true) {
-		QueueEntry entry;
-		if(tobj->getFront(&entry)) {
-			timeval now;
-			if(gettimeofday(&now, NULL) == -1) {
-				perror("clientHandler(): gettimeofday error");
-				return NULL;
-			} else {
-				if (now.tv_sec >= entry.dueTime) {
-					// resend the packet
-				}
-			}
+
+list<QueueEntry> TOUTimer::getExpired(long dueTime) {
+	list<QueueEntry> result;
+	pthread_mutex_lock(&q_mutex);
+	while(!q.empty()) {
+		printf("Inside handler\n");
+		QueueEntry front = q.front();
+		if (front.dueTime <= dueTime) {
+			result.push_back(front);
+			q.pop_front();	
 		} else {
-			sleep(DEFAULT_SLEEP_PERIOD);
+			printf("Queue wasn't empty\n");
+			// TODO: possibly need to check everything
+			// if items not ordered by due time
+			break;
 		}
 	}
-	return NULL;
+	pthread_mutex_unlock(&q_mutex);
+	return result;
 }
