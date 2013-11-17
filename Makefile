@@ -1,15 +1,17 @@
 CC=g++
 CFLAGS=-Wall -std=c++0x -g -DTOU_DEBUG
-all: main toulib.o server.o client.o segment.o
-main: main.cpp toulib.o server.o client.o segment.o
-	$(CC) $(CFLAGS) -o main main.cpp toulib.o server.o client.o segment.o
+all: toulib.o touserver.o touclient.o tousegment.o server client
 toulib.o: TCPOverUDP.cpp TCPOverUDP.h
 	$(CC) $(CFLAGS) -o toulib.o -c TCPOverUDP.cpp
-server.o: TOUServer.cpp TOUServer.h
-	$(CC) $(CFLAGS) -o server.o -c TOUServer.cpp 
-client.o: TOUClient.cpp TOUClient.h
-	$(CC) $(CFLAGS) -o client.o -c TOUClient.cpp 
-segment.o: TOUSegment.cpp TOUSegment.h
-	$(CC) $(CFLAGS) -o segment.o -c TOUSegment.cpp 
+touserver.o: TOUServer.cpp TOUServer.h
+	$(CC) $(CFLAGS) -o touserver.o -c TOUServer.cpp 
+touclient.o: TOUClient.cpp TOUClient.h
+	$(CC) $(CFLAGS) -o touclient.o -c TOUClient.cpp 
+tousegment.o: TOUSegment.cpp TOUSegment.h
+	$(CC) $(CFLAGS) -o tousegment.o -c TOUSegment.cpp 
+client: touclient.o toulib.o tousegment.o
+	$(CC) $(CFLAGS) -o client client.c touclient.o touserver.o toulib.o tousegment.o
+server: touserver.o toulib.o tousegment.o
+	$(CC) $(CFLAGS) -o server server.c touserver.o touclient.o toulib.o tousegment.o 
 clean:
-	rm -f *.o main
+	rm -f *.o server client
