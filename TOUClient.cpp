@@ -40,6 +40,7 @@ TOUClient::TOUClient(char *domainName, int port) {
 	pthread_mutex_init(&q_mutex, NULL);
 	this->congState = SLOW_START;
 	this->lastSeqReceived = 0;
+	this->currentTimeout = DEFAULT_CLIENT_TIMEOUT;
 }
 
 TOUClient::~TOUClient() {
@@ -250,7 +251,7 @@ void * TOUClient::clientTimeoutWorker(void * clientPtr) {
 void * TOUClient::clientSendWorker(void * clientPtr) {
 	TOUClient * cptr = (TOUClient*) clientPtr;
 	TOUQueue q = cptr->queue;
-	int seqoffset = 2;
+	int seqoffset = 2;	// TODO: start number should be chosen on random
 	int currentIndex = 0, toSend = cptr->toSend;
 	while(true) {
 		int unACKd = q.getLen();
@@ -263,22 +264,36 @@ void * TOUClient::clientSendWorker(void * clientPtr) {
 				return NULL;
 			}
 
-			TOUSegment segment(seqoffset+currentIndex, cptr->lastSeqReceived + 1,
-					RECEIVER_BUFFER_SIZE, false, false, false);
-			char buffer[SEGMENT_SIZE+TOU_HEADER_SIZE+1];
-			segment.putHeader(buffer);
-			unsigned int addr_len = sizeof dest;
-			int sentThisTime;
-			if ((sentThisTime = sendto(cptr->sockfd, cptr->data, bufsize, 0,
-					(struct sockaddr*)&(cptr->dest), addr_len)) == -1) {
-				perror("Failed to send data");
-			} else {
-				currentIndex += sentThisTime;
-				if(sentThisTime == 0) {
-					printf("Warning: 0 bytes sent\n");
-				}
-			}
+			int sentBytes = cptr->sendSegment(currentIndex, seqoffset, bufsize);
+			printf("Client has sent %d bytes\n", sentBytes);
 		}
 	}
 	return NULL;
+}
+
+int TOUClient::sendSegment(int currentIndex, int seqoffset, int numbytestosend) {
+	TOUSegment segment(seqoffset+currentIndex, lastSeqReceived + 1,
+			RECEIVER_BUFFER_SIZE, false, false, false);
+	char buffer[SEGMENT_SIZE+TOU_HEADER_SIZE+1];
+	segment.putHeader(buffer);
+	strncpy(&buffer[TOU_HEADER_SIZE], &(data[currentIndex]), numbytestosend);
+	unsigned int addr_len = sizeof dest;
+	int sentThisTime;
+	pthread_mutex_lock(&s_mutex);
+
+	sentThisTime = sendto(sockfd, buffer, numbytestosend + TOU_HEADER_SIZE, 0,
+		(struct sockaddr*)&dest, addr_len);
+	pthread_mutex_unlock(&s_mutex);
+	if (sentThisTime == -1) {
+		perror("Failed to send data");
+		return 0;
+	} else {
+		currentIndex += sentThisTime;
+		if(sentThisTime == 0) {
+			printf("Warning: 0 bytes sent\n");
+		} else {
+			queue.add(currentIndex + seqoffset, sentThisTime, currentTimeout);
+		}
+		return sentThisTime;
+	}
 }

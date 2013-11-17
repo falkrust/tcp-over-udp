@@ -14,6 +14,7 @@ private:
 	int port;
 	int sockfd;
 	int ssthresh, cwnd, dupACKcount;
+	int currentTimeout;	// in seconds
 	CLIENT_STATE currentState;
 	CLIENT_CNGSTNCTRL congState;
 	char * domainName;
@@ -28,6 +29,7 @@ private:
 	pthread_mutex_t s_mutex, v_mutex, q_mutex;
 	static void * clientTimeoutWorker(void * clientPtr);
 	static void * clientSendWorker(void * clientPtr);
+	int sendSegment(int startIndex, int offset, int numbytestosend);
 
 public:
 	/**
