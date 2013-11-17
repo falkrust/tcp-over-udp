@@ -2,12 +2,17 @@
 #include "TOUClient.h"
 #include <stdio.h>
 
-void TCPOverUDP::getNextState() {
-	printf("Hello world from here\n");
+
+TOUClient TCPOverUDP::getClient(char *domainName, int port) {
+	printf("And here\n");
+
+	#ifdef TOU_DEBUG
+	printf("THIS IS DEBUG MODE\n");
+	#endif
+
+	return TOUClient(domainName, port);
 }
 
-TOUClient TCPOverUDP::initClient() {
-	TOUClient test;
-	printf("And here\n");
-	return test;	
+TOUServer TCPOverUDP::getServer(int port) {
+	return TOUServer(port);
 }

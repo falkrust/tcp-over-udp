@@ -1,15 +1,17 @@
 #ifndef TOUCLIENT_H
 #define TOUCLIENT_H
 
-enum CLIENT_STATE {NOT_INIT, CLOSED, SYN_SENT, ESTABLISHED, FIN_WAIT_1,
-					FIN_WAIT_2, TIME_WAIT};
+#include <netdb.h>
+enum CLIENT_STATE {CL_NOINIT, CL_CLOSED, CL_SYNSENT, CL_ESTABLISHED, CL_FINWAIT1,
+					CL_FINWAIT2, CL_TIMEWAIT};
 
 class TOUClient {
 private:
-	char *domainName;
 	int port;
 	int sockfd;
 	CLIENT_STATE currentState;
+	addrinfo ainfo;
+	char *domainName;
 public:
 	/**
 	 * Constructor
@@ -21,14 +23,15 @@ public:
 
 	/*
 	 * Initialize the client
-	 * return 0 on success, and nonzero otherwise
+	 * return true on success, and false otherwise
 	 */
-	int init();
+	bool init();
 	/*
 	 * Connect to server
-	 * return 0 on success, and nonzero otherwise
+	 * return true on success, and false otherwise
 	 */
-	int connect();
+	bool connect();
+	bool send(char * data, int len);
 };
 
 #endif

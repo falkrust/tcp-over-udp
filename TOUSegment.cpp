@@ -60,7 +60,7 @@ unsigned int TOUSegment::getACKNum() {
 	return ACKNum;
 }
 
-bool TOUSegment::isACK() {
+bool TOUSegment::isAck() {
 	return is_ack;
 }
 

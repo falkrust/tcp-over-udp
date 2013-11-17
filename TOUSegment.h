@@ -26,7 +26,7 @@ public:
 	static TOUSegment parseSegment(char *data, int len);
 	unsigned int getSequenceNum();
 	unsigned int getACKNum();
-	bool isACK();
+	bool isAck();
 	bool isFin();
 	bool isSyn();
 	char * getData();

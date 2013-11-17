@@ -6,12 +6,10 @@
 
 class TCPOverUDP {
 private:
-	int currentState;
 
 public:
-	void getNextState();
-	TOUClient initClient();
-    TOUServer initServer();
+	static TOUClient getClient(char *domainName, int port);
+    static TOUServer getServer(int port);
 };
 
 #endif  // TCPOVERUDP_H
