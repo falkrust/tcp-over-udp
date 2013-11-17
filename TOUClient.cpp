@@ -11,6 +11,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <pthread.h>
+#include <algorithm>
 
 #include "TOUClient.h"
 #include "TOUSegment.h"
@@ -24,6 +25,7 @@
 #define DEFAULT_WORKER_SLEEP_PERIOD 5
 #define RECEIVER_BUFFER_SIZE 2500
 #define DEFAULT_CLIENT_TIMEOUT 5
+#define SEGMENT_SIZE 100
 
 using namespace std;
 
@@ -35,13 +37,18 @@ TOUClient::TOUClient(char *domainName, int port) {
 	this->ssthresh = 1000;
 	pthread_mutex_init(&s_mutex, NULL);
 	pthread_mutex_init(&v_mutex, NULL);
+	pthread_mutex_init(&q_mutex, NULL);
 	this->congState = SLOW_START;
+	this->lastSeqReceived = 0;
 }
 
 TOUClient::~TOUClient() {
 	// TODO
 	pthread_kill(tid, SIGINT);
 	printf("Inside TOUClient destructor\n");
+	pthread_mutex_destroy(&s_mutex);
+	pthread_mutex_destroy(&v_mutex);
+	pthread_mutex_destroy(&q_mutex);
 }
 
 void *get_in_addr_1(struct sockaddr *sa)
@@ -138,7 +145,6 @@ bool TOUClient::connect() {
 		}
 
 		printf("The data was sent\n");
-		sockaddr_storage dest;
 		unsigned int addr_len = sizeof dest;
 		int numbytes;
 		if ((numbytes = recvfrom(sockfd, buffer, TOU_HEADER_SIZE , 0,
@@ -159,7 +165,8 @@ bool TOUClient::connect() {
 			perror("connect(): failed to receive synack");
 			return false;
 		}
-		TOUSegment ack(1, synack.getSequenceNum()+1, 2500, false, true, false);
+		lastSeqReceived = synack.getSequenceNum();
+		TOUSegment ack(1, lastSeqReceived+1, 2500, false, true, false);
 		ack.putHeader(buffer);
 		if (sendto(sockfd, buffer, TOU_HEADER_SIZE, 0, (struct sockaddr*)&dest, addr_len) == -1) {
 			perror("Failed to send ack");
@@ -168,7 +175,7 @@ bool TOUClient::connect() {
 		printf("Connection established\n");
 
 
-		// set the timer parameters and launch a thread
+		// launch thread for handling timeouts
 		pthread_create(&tid, NULL, clientTimeoutWorker, this);
 		printf("Created thread\n");
 
@@ -193,23 +200,38 @@ bool TOUClient::send(char * data, int len) {
 		return false;
 	}
 
+	this->data = data;
+	this->toSend = len;
+	pthread_mutex_lock(&v_mutex);
 	lowestSent = 0;
 	highestSent = 0;
 	highestACKd = 0;
+	pthread_mutex_unlock(&v_mutex);
+
+	pthread_t wid;
+	pthread_create(&wid, NULL, clientSendWorker, this);
+
+	// keep waiting for acks
+	while(true) {
+
+	}
+
+	pthread_join(wid, NULL);
 	return false;
+
 }
 
 
 void * TOUClient::clientTimeoutWorker(void * clientPtr) {
 	TOUClient * cptr = (TOUClient*) clientPtr;
-	TOUQueue timer = cptr->timer;	
+	TOUQueue queue = cptr->queue;	
 
 	while(true) {
 		long now = TOUQueue::getCurrentSeconds();
-		list<QueueEntry> expired = timer.getExpired(now);
+		list<QueueEntry> expired = queue.getExpired(now);
 		if(expired.empty()) {
 			QueueEntry front;
-			if (timer.getFront(&front)) {
+			if (queue.getFront(&front)) {
 				sleep(front.dueTime - now);
 			} else {
 				sleep(DEFAULT_WORKER_SLEEP_PERIOD);
@@ -227,6 +249,36 @@ void * TOUClient::clientTimeoutWorker(void * clientPtr) {
 
 void * TOUClient::clientSendWorker(void * clientPtr) {
 	TOUClient * cptr = (TOUClient*) clientPtr;
-	TOUQueue timer = cptr->timer;	
+	TOUQueue q = cptr->queue;
+	int seqoffset = 2;
+	int currentIndex = 0, toSend = cptr->toSend;
+	while(true) {
+		int unACKd = q.getLen();
+		if((unACKd >= RECEIVER_BUFFER_SIZE) || (unACKd >= cptr->cwnd)) {
+			sleep(DEFAULT_WORKER_SLEEP_PERIOD);
+		} else {
+			int bufsize = SEGMENT_SIZE < (toSend - currentIndex) ? SEGMENT_SIZE : (toSend - currentIndex);
+			if (bufsize <= 0) {
+				// all sent
+				return NULL;
+			}
+
+			TOUSegment segment(seqoffset+currentIndex, cptr->lastSeqReceived + 1,
+					RECEIVER_BUFFER_SIZE, false, false, false);
+			char buffer[SEGMENT_SIZE+TOU_HEADER_SIZE+1];
+			segment.putHeader(buffer);
+			unsigned int addr_len = sizeof dest;
+			int sentThisTime;
+			if ((sentThisTime = sendto(cptr->sockfd, cptr->data, bufsize, 0,
+					(struct sockaddr*)&(cptr->dest), addr_len)) == -1) {
+				perror("Failed to send data");
+			} else {
+				currentIndex += sentThisTime;
+				if(sentThisTime == 0) {
+					printf("Warning: 0 bytes sent\n");
+				}
+			}
+		}
+	}
 	return NULL;
 }

@@ -28,13 +28,14 @@ private:
 
 public:
 	TOUQueue();
-	bool add(int byteNum, long delta);
+	bool add(int byteStart, unsigned len, long delta);
 	bool removeBeforeByte(unsigned byteNum);
 	void removeFront();
 	bool getFront(QueueEntry * entry);
 	bool isEmpty();
 	static long getCurrentSeconds();
 	list<QueueEntry> getExpired(long dueTime);
+	int getLen();
 };
 
 #endif

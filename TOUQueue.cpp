@@ -12,13 +12,12 @@ TOUQueue::TOUQueue() {
 	q_mutex = PTHREAD_MUTEX_INITIALIZER;
 }
 
-bool TOUQueue::add(int byteStart, long delta) {
+bool TOUQueue::add(int byteStart, unsigned len, long delta) {
 	long now = getCurrentSeconds();
-	QueueEntry newEntry;
-	newEntry.byteStart = byteStart;
-	newEntry.dueTime = delta + now;
+	QueueEntry newEntry(byteStart, len, now + delta);
 	pthread_mutex_lock(&q_mutex);
 	q.push_back(newEntry);
+	this->len += len;
 	pthread_mutex_unlock(&q_mutex);
 	return true;
 }
@@ -27,6 +26,7 @@ bool TOUQueue::removeBeforeByte(unsigned byteStart) {
 	pthread_mutex_lock(&q_mutex);
 	for(deque<QueueEntry>::iterator it = q.begin(); it != q.end();) {
 		QueueEntry cur = *it;
+		this->len -= cur.len;
 		if (cur.byteStart <= byteStart) {
 			it = q.erase(it);
 		} else {
@@ -96,6 +96,14 @@ list<QueueEntry> TOUQueue::getExpired(long dueTime) {
 			break;
 		}
 	}
+	pthread_mutex_unlock(&q_mutex);
+	return result;
+}
+
+int TOUQueue::getLen() {
+	int result;
+	pthread_mutex_lock(&q_mutex);
+	result = len;
 	pthread_mutex_unlock(&q_mutex);
 	return result;
 }

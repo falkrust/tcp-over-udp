@@ -13,16 +13,19 @@ class TOUClient {
 private:
 	int port;
 	int sockfd;
-	unsigned ssthresh, cwnd, dupACKcount;
+	int ssthresh, cwnd, dupACKcount;
 	CLIENT_STATE currentState;
 	CLIENT_CNGSTNCTRL congState;
-	char *domainName;
-
+	char * domainName;
+	char * data;
+	sockaddr_storage dest;
 	unsigned int lowestSent, highestSent, highestACKd;
-	TOUQueue timer;
+	unsigned lastSeqReceived;
+	int toSend, hasSent;
+	TOUQueue queue;
 	pthread_t tid, sid;
 	/* s_mutex - on socket, v_mutex - on different parameters */
-	pthread_mutex_t s_mutex, v_mutex;
+	pthread_mutex_t s_mutex, v_mutex, q_mutex;
 	static void * clientTimeoutWorker(void * clientPtr);
 	static void * clientSendWorker(void * clientPtr);
 
