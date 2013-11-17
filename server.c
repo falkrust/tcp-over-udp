@@ -10,6 +10,10 @@ int main(int argc, char ** argv) {
 	serv.init();
 	serv.listen();
 
+	char * buf = new char[10001];
+
+	serv.recv(buf, 10000);
+
 	/*
 	TOUSegment synSegment(1, 2, 3, false, false, true);
 	char buffer[13];

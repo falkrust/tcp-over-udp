@@ -32,9 +32,9 @@ private:
 	static void * clientTimeoutWorker(void * clientPtr);
 	static void * clientSendWorker(void * clientPtr);
 	int sendSegment(int startIndex, int numbytestosend);
-	void slowStartHandler(bool);
-	void congAvoidanceHandler(bool);
-	void fastRecoveryHandler(bool);
+	void slowStartHandler(bool, unsigned);
+	void congAvoidanceHandler(bool, unsigned);
+	void fastRecoveryHandler(bool, unsigned);
 
 public:
 	/**

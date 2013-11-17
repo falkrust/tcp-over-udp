@@ -51,6 +51,7 @@ TOUClient::~TOUClient() {
 	pthread_mutex_destroy(&s_mutex);
 	pthread_mutex_destroy(&v_mutex);
 	pthread_mutex_destroy(&q_mutex);
+	close(sockfd);
 }
 
 void *get_in_addr_1(struct sockaddr *sa)
@@ -72,7 +73,7 @@ bool TOUClient::init() {
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_DGRAM;
 	hints.ai_flags = AI_PASSIVE;
-	const char * strPort = to_string(this->port+1).c_str();
+	const char * strPort = to_string((long long int)this->port+1).c_str();
 
 	if ((rv = getaddrinfo(NULL, strPort, &hints, &servinfo)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
@@ -130,7 +131,7 @@ bool TOUClient::connect() {
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_DGRAM;
 	int rv;
-	const char * strPort = std::to_string(port).c_str();
+	const char * strPort = std::to_string((long long int)port).c_str();
 	if ((rv = getaddrinfo(domainName, strPort, &hints, &servinfo)) != 0) {
 		perror("connect(): failed to generate server address");
 		return false;
@@ -230,13 +231,13 @@ bool TOUClient::send(char * data, int len) {
 
 				switch(congControlState) {
 					case SLOW_START:	
-							slowStartHandler(isDuplicateACK);
+							slowStartHandler(isDuplicateACK, ackNum);
 							break;
 					case CONG_AVOIDANCE:
-							congAvoidanceHandler(isDuplicateACK);
+							congAvoidanceHandler(isDuplicateACK, ackNum);
 							break;
 					case FAST_RECOVERY:
-							fastRecoveryHandler(isDuplicateACK);
+							fastRecoveryHandler(isDuplicateACK, ackNum);
 							break;
 				}	
 			}
@@ -247,7 +248,7 @@ bool TOUClient::send(char * data, int len) {
 	return false;
 }
 
-void TOUClient::slowStartHandler(bool isDuplicateACK) {
+void TOUClient::slowStartHandler(bool isDuplicateACK, unsigned seqnum) {
 	if(isDuplicateACK) {
 		dupACKcount++;	
 		if (dupACKcount == 3) {
@@ -262,7 +263,7 @@ void TOUClient::slowStartHandler(bool isDuplicateACK) {
 	}
 }
 
-void TOUClient::congAvoidanceHandler(bool isDuplicateACK) {
+void TOUClient::congAvoidanceHandler(bool isDuplicateACK, unsigned seqnum) {
 	if(isDuplicateACK) {
 		dupACKcount++;
 		if (dupACKcount == 3) {
@@ -278,10 +279,11 @@ void TOUClient::congAvoidanceHandler(bool isDuplicateACK) {
 	};
 }
 
-void TOUClient::fastRecoveryHandler(bool isDuplicateACK) {
+void TOUClient::fastRecoveryHandler(bool isDuplicateACK, unsigned seqnum) {
 	if(isDuplicateACK) {
 		cwnd = cwnd + MSS;
 		// transmit new segment if allowed
+		// nothing to do hear, handled by worker thread :)
 	}
 }
 void * TOUClient::clientTimeoutWorker(void * clientPtr) {

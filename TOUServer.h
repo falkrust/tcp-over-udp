@@ -13,12 +13,16 @@ private:
 	ServerState currentState;
 	void accept();
 	sockaddr_storage dest;
+	socklen_t addr_len;
+	unsigned lastSeqRcvd;
+	bool sendAck(unsigned);
 public:
 	TOUServer(int port);
 	~TOUServer();
 	bool init();
 	bool listen();
-
+	int recv(char * buf, int len);
+	void finalizeConnection();
 };
 
 #endif	//TOUSERVER_H

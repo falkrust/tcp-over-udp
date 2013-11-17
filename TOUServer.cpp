@@ -45,7 +45,7 @@ bool TOUServer::init() {
 	hints.ai_family = AF_UNSPEC; // set to AF_INET to force IPv4
 	hints.ai_socktype = SOCK_DGRAM;
 	hints.ai_flags = AI_PASSIVE; // use my IP
-	const char * strPort = std::to_string(this->port).c_str();
+	const char * strPort = std::to_string((long long int)this->port).c_str();
 
 	if ((rv = getaddrinfo(NULL, strPort, &hints, &servinfo)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
@@ -79,7 +79,7 @@ bool TOUServer::init() {
 }
 
 bool TOUServer::listen() {
-	socklen_t addr_len = sizeof dest;
+	addr_len = sizeof dest;
 	char s[INET6_ADDRSTRLEN];
 	char buf[MAX_BUFLEN+1];
 	int numbytes;
@@ -131,15 +131,67 @@ bool TOUServer::listen() {
 		return false;
 	}
 
+	lastSeqRcvd = ack.getSequenceNum();
 	// connection established
 	printf("listen(): connection established\n");
 	currentState = SV_ESTABLISHED;
-	accept();
 
 	close(sockfd);
 	return true;
 }
 
-void TOUServer::accept() {
+int TOUServer::recv(char * buf, int len) {
+
+	if (currentState != SV_ESTABLISHED) {
+		perror("socket is not connected");
+		return -1;
+	}
+
+	char buffer[2501];
+	char *currentPtr= buf;
+	int bytesLeft = len;
+	int currentSize = 2500;
+	int bytesRecvd = 0;
+	int numbytes;
+	while(true) {
+		if ((numbytes = recvfrom(sockfd, buffer, currentSize-1 , 0,
+			(struct sockaddr *)&dest, &addr_len)) == -1) {
+				perror("listen(): failed to get ack");
+				return -1;
+		}
+
+		TOUSegment seg = TOUSegment::parseSegment(buf, numbytes);
+		if (seg.isFin()) {
+			finalizeConnection();
+			return bytesRecvd;	
+		} else {
+
+			int dataLen = numbytes - TOU_HEADER_SIZE;	// header size is 12 bytes
+			if (dataLen > 0) {
+				if (dataLen <= bytesLeft) {
+					strncpy(currentPtr, buf, dataLen);
+					currentPtr = &currentPtr[dataLen];
+					bytesRecvd += dataLen;
+				} else {
+					return bytesRecvd;
+				}	
+			}
+			unsigned seqNum = seg.getSequenceNum();
+			sendAck(seqNum);
+		}
+	}
 	printf("Inside accpet()\n");
+}
+
+void TOUServer::finalizeConnection() {
+	// TODO:
+}
+
+bool TOUServer::sendAck(unsigned seqNum) {
+	if (seqNum <= lastSeqRcvd) {
+		// duplicate segment
+		return true;
+	} else {
+		return true;
+	}
 }
