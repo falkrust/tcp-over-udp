@@ -9,9 +9,9 @@ touclient.o: TOUClient.cpp TOUClient.h
 	$(CC) $(CFLAGS) -o touclient.o -c TOUClient.cpp 
 tousegment.o: TOUSegment.cpp TOUSegment.h
 	$(CC) $(CFLAGS) -o tousegment.o -c TOUSegment.cpp 
-client: touclient.o toulib.o tousegment.o
+client: touclient.o toulib.o tousegment.o client.c
 	$(CC) $(CFLAGS) -o client client.c touclient.o touserver.o toulib.o tousegment.o
-server: touserver.o toulib.o tousegment.o
+server: touserver.o toulib.o tousegment.o server.c
 	$(CC) $(CFLAGS) -o server server.c touserver.o touclient.o toulib.o tousegment.o 
 clean:
 	rm -f *.o server client
