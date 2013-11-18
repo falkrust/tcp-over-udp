@@ -27,7 +27,7 @@ bool TOUQueue::removeBeforeByte(unsigned byteStart) {
 	for(deque<QueueEntry>::iterator it = q.begin(); it != q.end();) {
 		QueueEntry cur = *it;
 		this->len -= cur.len;
-		if (cur.byteStart <= byteStart) {
+		if (cur.byteStart < byteStart) {
 			it = q.erase(it);
 		} else {
 			++it;

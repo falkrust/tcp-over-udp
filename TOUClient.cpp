@@ -259,7 +259,8 @@ void TOUClient::slowStartHandler(bool isDuplicateACK, unsigned seqnum) {
 	} else {
 		cwnd = cwnd+MSS;
 		dupACKcount = 0;
-		// todo retransmit new segment
+		// next packet will be retransmitted by worker thread
+		queue.removeBeforeByte(seqnum);
 	}
 }
 
@@ -275,7 +276,7 @@ void TOUClient::congAvoidanceHandler(bool isDuplicateACK, unsigned seqnum) {
 		// new ACK
 		cwnd = cwnd + MSS*MSS/cwnd;
 		dupACKcount = 0;
-		// todo transmit new segment
+		queue.removeBeforeByte(seqnum);
 	};
 }
 
@@ -284,6 +285,9 @@ void TOUClient::fastRecoveryHandler(bool isDuplicateACK, unsigned seqnum) {
 		cwnd = cwnd + MSS;
 		// transmit new segment if allowed
 		// nothing to do hear, handled by worker thread :)
+	} else {
+		cwnd = ssthresh;
+		dupACKcount = 0;
 	}
 }
 void * TOUClient::clientTimeoutWorker(void * clientPtr) {
